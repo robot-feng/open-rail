@@ -147,13 +147,24 @@ class VLAServer:
         if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
             raise ValueError(f"Invalid reset_generation in request metadata: {generation!r}")
 
-        with self._model_reset_lock:
-            if self._client_reset_generations.get(client_id) == generation:
-                return
-            reset = getattr(self.model, 'reset', None)
-            if callable(reset):
-                reset()
+        previous = self._client_reset_generations.get(client_id)
+        if previous is not None and generation < previous:
+            raise ValueError(
+                f"Stale reset_generation {generation}; client {client_id!r} "
+                f"is already at generation {previous}"
+            )
+        if previous != generation:
+            self.model.reset()
             self._client_reset_generations[client_id] = generation
+
+    def _infer_model(self, model_data, client_id, meta):
+        # Stateful models must finish the previous inference before resetting.
+        # Keep stateless models on the existing concurrent inference path.
+        if not callable(getattr(self.model, 'reset', None)):
+            return self.model.infer(model_data)
+        with self._model_reset_lock:
+            self._reset_model_for_request(client_id, meta)
+            return self.model.infer(model_data)
     
     def inference(self, client_id, data, meta=None):
         """Process inference request with image decoding and model inference
@@ -200,14 +211,7 @@ class VLAServer:
             # Submit inference task to thread pool with timing
             # inference_start_time = time.time()
             model_data = data if isinstance(data, list) else [data]
-            infer_with_reset = getattr(self.model, 'infer_with_reset', None)
-            if callable(infer_with_reset) and isinstance(meta, dict) and 'reset_generation' in meta:
-                future = self.executor.submit(
-                    infer_with_reset, model_data, meta['reset_generation'], client_id
-                )
-            else:
-                self._reset_model_for_request(client_id, meta)
-                future = self.executor.submit(self.model.infer, model_data)
+            future = self.executor.submit(self._infer_model, model_data, client_id, meta)
             # for idx, item in enumerate(model_data):
             #     for k, v in item.get('obs', {}).items():
             #         print(f"Debug: model_data[{idx}]['obs']['{k}'] dtype: {getattr(v, 'dtype', type(v))}")
@@ -234,6 +238,8 @@ class VLAServer:
             start_time: Inference start time for timing calculation
             meta: Optional metadata dict from request.
         """
+        if future.cancelled():
+            return
         try:
             result = future.result()  # Get thread result
             
@@ -272,5 +278,13 @@ class VLAServer:
         # Stop threads
         with self.thread_lock:
             self.running = False
-        self.executor.shutdown(wait=False)
-        self.zmq_server.close()
+        if self.receive_thread.is_alive() and self.receive_thread is not threading.current_thread():
+            self.receive_thread.join()
+        self.executor.shutdown(wait=True, cancel_futures=True)
+        self.image_decode_executor.shutdown(wait=True, cancel_futures=True)
+        try:
+            close = getattr(self.model, 'close', None)
+            if callable(close):
+                close()
+        finally:
+            self.zmq_server.close()

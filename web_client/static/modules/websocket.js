@@ -38,11 +38,17 @@ function connectWS() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  Camera WebSocket (VisualizeServer — port 8765)
+//  Camera WebSocket (proxied through the current UI origin)
 // ═══════════════════════════════════════════════════════
+function getCamWsUrl() {
+  return `${WS_SCHEME}://${WS_HOSTNAME}${WS_PORT}/visual-ws`;
+}
+
 function connectCamWS() {
-  if (App.camWs && App.camWs.readyState <= 1) return;
-  App.camWs = new WebSocket(CAM_WS_URL);
+  const url = getCamWsUrl();
+  if (App.camWs && App.camWs.readyState <= 1 && App.camWs.url === url) return;
+  disconnectCamWS();
+  App.camWs = new WebSocket(url);
   App.camWs.binaryType = 'arraybuffer';
 
   clearTimeout(App.camWsConnectTimeoutTimer);
@@ -79,8 +85,10 @@ function connectCamWS() {
     }
   };
 
-  App.camWs.onerror = () => {
-    if (App.camWs) App.camWs.close();
+  const socket = App.camWs;
+  socket.onerror = () => {
+    socket.onerror = null;
+    if (socket.readyState < 2) socket.close();
   };
 }
 
@@ -89,6 +97,8 @@ function disconnectCamWS() {
   clearTimeout(App.camWsConnectTimeoutTimer);
   if (App.camWs) {
     App.camWs.onclose = null; // prevent auto-reconnect after manual close
+    App.camWs.onopen = null;
+    App.camWs.onerror = null;
     App.camWs.close();
     App.camWs = null;
   }

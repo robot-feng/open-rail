@@ -19,6 +19,10 @@ class RobotBody(RobotBase):
         """
         super().__init__(config)
         self.logger = logging.getLogger(__name__) # required for correct logging output
+        # Validate the SDK convention before opening either hardware interface.
+        self._head_feedback_unit = str(self.config.get('head_feedback_unit', 'degrees')).lower()
+        if self._head_feedback_unit not in {'degrees', 'radians'}:
+            raise ValueError("head_feedback_unit must be 'degrees' or 'radians'")
         self._cam_names = self.config['camera']['names']
         self._cam_ref = self.config['camera']['ref']
         self._cam_ref_name = self._cam_names[self._cam_ref]
@@ -39,9 +43,6 @@ class RobotBody(RobotBase):
         self.current_state = np.zeros(self.action_dim, dtype=np.float32)
         self._obs_state_buffer = np.empty(0, dtype=np.float32)
         self.current_timestamp = 0
-
-        self._gripper_vmin = 35.0
-        self._gripper_vmax = 120.0
 
         self.gripper_count = 0
         self.gripper_cmd = [0.0, 0.0]
@@ -72,13 +73,9 @@ class RobotBody(RobotBase):
 
         if 'gripper' in segments and self.gripper_count % self.config['gripper_freq'] == 0:
             self.gripper_count = 0
-            arr = np.clip(segments['gripper'], 0, 1)
-            gripper_optimized = True
-            if gripper_optimized:
-                gamma = 4
-                # adjusted = arr * gamma / (arr * gamma + (1 - arr) ** gamma)
-                adjusted = arr ** gamma / (arr ** gamma + (1 - arr) ** gamma)
-                arr = np.clip(adjusted, 0, 1)
+            arr = np.asarray(segments['gripper'], dtype=np.float32)
+            # Policy and SDK command both use 0=open, 1=closed.
+            arr = np.clip(arr, 0.0, 1.0)
             self.execute_action({self.config['hand_type']: arr.tolist()})
         self.gripper_count += 1
 
@@ -89,7 +86,10 @@ class RobotBody(RobotBase):
                 self.execute_action({'head': head_action.tolist()})
             self.head_count += 1
         if 'waist' in segments:
-            self.execute_action({'waist': segments['waist'].tolist()})
+            # RAIL observations/actions store lift in meters; move_waist expects cm.
+            waist_action = segments['waist'].copy()
+            waist_action[1] *= 100.0
+            self.execute_action({'waist': waist_action.tolist()})
 
         # Count gripper value changes and send gripper command when accumulated changes reach threshold
         # new_gripper_cmd = action[14:16]
@@ -99,7 +99,7 @@ class RobotBody(RobotBase):
         #     self.execute_action({self.config['hand_type']: new_gripper_cmd.tolist()})
         #     self.gripper_cmd = new_gripper_cmd
         #     self.gripper_count = 0
-    
+
     def execute_action(self, data):
         """Execute action interface without strategy.
         
@@ -113,6 +113,8 @@ class RobotBody(RobotBase):
         if 'hand_as_gripper' in data:
             self.robot.move_hand_as_gripper(data['hand_as_gripper'])
         if 'head' in data:
+            # RAIL head targets are radians; RobotDds.move_head() accepts radians
+            # and converts them to the SDK's degree-valued body-pose request.
             self.robot.move_head(data['head'])
         if 'waist' in data:
             self.robot.move_waist(data['waist'])
@@ -161,17 +163,29 @@ class RobotBody(RobotBase):
                     result[f'cam.{key}'] = image[:, :, ::-1]
 
             state_size = 0
-            gripper_start = None
             for proprio, joint_states_nearest_fun in self._proprio_funs:
                 currt_joint_states, _ = joint_states_nearest_fun(ref_timestamp)
                 curr_states = np.asarray(currt_joint_states, dtype=np.float32).ravel()
 
+                # A2D reports gripper feedback in 0..120; RAIL data uses 0..1.
                 if proprio == 'gripper':
-                    gripper_start = state_size
+                    curr_states = np.clip(curr_states / 120.0, 0.0, 1.0)
+
+                # RobotDds 1.5.0 converts head feedback radians to degrees before
+                # buffering it. Keep the RAIL/model-facing state in radians.
+                if proprio == 'head':
+                    if curr_states.size != 2 or not np.isfinite(curr_states).all():
+                        raise ValueError(
+                            'Expected 2 finite head feedback values'
+                        )
+                    if self._head_feedback_unit == 'degrees':
+                        curr_states = np.deg2rad(curr_states)
 
                 need = state_size + curr_states.size
                 if self._obs_state_buffer.size < need:
-                    self._obs_state_buffer = np.empty(need, dtype=np.float32)
+                    expanded = np.empty(need, dtype=np.float32)
+                    expanded[:state_size] = self._obs_state_buffer[:state_size]
+                    self._obs_state_buffer = expanded
 
                 self._obs_state_buffer[state_size:need] = curr_states
                 state_size = need
@@ -181,10 +195,6 @@ class RobotBody(RobotBase):
                 self.current_state = np.zeros(state_size, dtype=np.float32)
 
             self.current_state[:state_size] = result['obs.state']
-            if gripper_start is not None and gripper_start + 2 <= state_size:
-                gs = slice(gripper_start, gripper_start + 2)
-                self.current_state[gs] -= self._gripper_vmin
-                self.current_state[gs] /= (self._gripper_vmax - self._gripper_vmin)
 
             return result
         except Exception as e:

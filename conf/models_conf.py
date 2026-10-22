@@ -164,7 +164,7 @@ def get_starvla_config():
     """Generate configuration for the StarVLA framework adapter."""
     config = ConfigDict()
     config.model_path = '/path/to/starvla/checkpoint'
-    config.repo_path = os.environ.get('STARVLA_ROOT', '/data/EvaClient-StarVLA/starVLA')
+    config.repo_path = os.environ.get('STARVLA_ROOT', '/path/to/starvla')
     config.device = 'cuda'
     config.use_bf16 = False
     config.unnorm_key = None
@@ -172,10 +172,22 @@ def get_starvla_config():
     # Camera order must match the checkpoint's training-time image order.
     config.camera_keys = ['cam.head', 'cam.hand_left', 'cam.hand_right']
     config.send_state = True
+    config.normalize_state = True  # Reuse the checkpoint's training-time state transforms.
     config.state_key = 'state'
     config.language_key = 'language'
-    config.expected_state_dim = None
-    config.expected_action_dim = None
+    # Flat G1 DiffusionPolicy checkpoints store state as left7+left gripper,
+    # right7+right gripper, then head/waist. Expand its 8D right-arm+gripper
+    # output into a full 20D RAIL action, copying unpredicted dimensions from
+    # the current state.
+    config.dp_state_indices = (
+        list(range(7)) + [14] + list(range(7, 14)) + [15, 16, 17, 18, 19]
+    )
+    config.dp_action_state_indices = list(range(7, 14)) + [15]
+    config.dp_rail_action_dim = 20
+    # The active G1 DP checkpoint ran more smoothly with ten denoising steps.
+    config.dp_num_inference_steps = 10
+    config.expected_state_dim = 20
+    config.expected_action_dim = 20
     return config
 
 

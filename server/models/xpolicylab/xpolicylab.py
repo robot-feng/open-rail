@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from ml_collections import ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -73,10 +74,10 @@ class ModelVLA:
             "evaluation_id": str(config.get("evaluation_id", "open-rail")),
             "trial_id": str(config.get("trial_id", "open-rail")),
             "action_case_id": config.get("action_case_id"),
+            "ws_ping_interval_s": config.get("ws_ping_interval_s", 20.0),
+            "ws_ping_timeout_s": config.get("ws_ping_timeout_s", 20.0),
         }
         for key in (
-            "ws_ping_interval_s",
-            "ws_ping_timeout_s",
             "connect_timeout_s",
             "handshake_timeout_s",
             "request_timeout_s",
@@ -91,7 +92,6 @@ class ModelVLA:
 
         self.client = WsModelClient(**client_kwargs)
         self._client_lock = threading.Lock()
-        self._client_reset_generations = {}
         if bool(config.get("prepare_case", False)):
             if not client_kwargs["action_case_id"]:
                 self.client.close()
@@ -99,6 +99,8 @@ class ModelVLA:
                     "models.xpolicylab.prepare_case requires a non-empty action_case_id"
                 )
             case_meta = config.get("case_meta", {})
+            if isinstance(case_meta, ConfigDict):
+                case_meta = case_meta.to_dict()
             if not isinstance(case_meta, Mapping):
                 self.client.close()
                 raise TypeError("models.xpolicylab.case_meta must be a mapping")
@@ -269,7 +271,7 @@ class ModelVLA:
             raise ValueError("XPolicyLab returned non-finite actions")
         return np.ascontiguousarray(actions, dtype=np.float32)
 
-    def _infer(self, sequence, reset_generation=None, client_id=None):
+    def infer(self, sequence):
         if not isinstance(sequence, (list, tuple)) or not sequence:
             raise ValueError("XPolicyLab inference requires a non-empty observation sequence")
         data = sequence[0]
@@ -279,26 +281,8 @@ class ModelVLA:
         observation = self._build_observation(data["obs"])
         # The Open-Rail inference pool can call this adapter from several
         # workers. XPolicyLab's synchronous client and update/get state pair
-        # are sequential APIs, so serialize reset + update/get as one transaction.
+        # are sequential APIs, so serialize update/get as one transaction.
         with self._client_lock:
-            if reset_generation is not None:
-                if (
-                    isinstance(reset_generation, bool)
-                    or not isinstance(reset_generation, int)
-                    or reset_generation < 0
-                ):
-                    raise ValueError(
-                        f"Invalid reset_generation in request metadata: {reset_generation!r}"
-                    )
-                previous_generation = self._client_reset_generations.get(client_id)
-                if previous_generation is not None and reset_generation < previous_generation:
-                    raise ValueError(
-                        f"Stale reset_generation {reset_generation}; client {client_id!r} "
-                        f"is already at generation {previous_generation}"
-                    )
-                if previous_generation != reset_generation:
-                    self.client.call("reset")
-                    self._client_reset_generations[client_id] = reset_generation
             self.client.call("update_obs", observation)
             actions = self._actions_to_array(self.client.call("get_action"))
         return {
@@ -308,13 +292,6 @@ class ModelVLA:
             "loc_timestamp": data["loc_timestamp"],
             "ext": {},
         }
-
-    def infer(self, sequence):
-        return self._infer(sequence)
-
-    def infer_with_reset(self, sequence, reset_generation, client_id=None):
-        """Apply client reset generations atomically with the associated inference."""
-        return self._infer(sequence, reset_generation, client_id)
 
     def reset(self):
         with self._client_lock:

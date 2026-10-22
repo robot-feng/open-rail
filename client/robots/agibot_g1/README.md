@@ -53,3 +53,16 @@ The AgiBot G1 robot is configured through `get_agibot_g1_config()` in
 The Web config loader accepts legacy `robots.type: a2d` and `robots.a2d`
 settings and maps them to `agibot_g1`. Model-side A2D embodiment/dataset
 identifiers and the external `a2d_sdk` import are unchanged.
+
+Head yaw/pitch observations and targets in RAIL use radians. The installed
+A2D SDK reports head feedback in degrees, so `head_feedback_unit` defaults to
+`degrees`; the driver converts it before filling both `obs.state` and
+`current_state`. Set this option to `radians` only for an SDK whose feedback
+API already returns radians. It describes the SDK input, not the RAIL output.
+`RobotDds.move_head()` accepts radians and converts to degrees internally;
+RAIL therefore passes head targets through without another conversion.
+
+Restart the robot client after changing this setting. Existing recordings and
+normalization statistics are not rewritten: recordings made before this
+conversion may contain head angles in degrees and require explicit migration
+before combining them with new recordings.

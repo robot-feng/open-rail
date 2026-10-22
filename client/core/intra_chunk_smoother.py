@@ -388,6 +388,21 @@ class IntraChunkSmoother():
 
         # results = [future.result() for future in futures]
         
+        # Dimensions outside the configured policy segments are pass-through
+        # values. Some model adapters return a full robot target (including
+        # held/manual dimensions) while the robot layout only fits learned
+        # dimensions. Preserve those values with zero-order hold.
+        timestamps_fitted = np.arange(start_time, end_time, time_step)
+        unassigned = [i for i, result in enumerate(final_joint_results) if result is None]
+        if unassigned and action_chunk.shape[1] > 0:
+            source_indices = np.searchsorted(timestamps, timestamps_fitted, side='right') - 1
+            source_indices = np.clip(source_indices, 0, action_chunk.shape[1] - 1)
+            for index in unassigned:
+                values = action_chunk[index, source_indices]
+                final_joint_results[index] = values
+                final_velocity_results[index] = np.zeros_like(values)
+                final_acceleration_results[index] = np.zeros_like(values)
+
         # Parse results - joint_results represent joint angle data, velocity_results represent joint velocity data
         
         # for index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted in results:
@@ -398,7 +413,6 @@ class IntraChunkSmoother():
         traj_fitted = np.array(final_joint_results)
         vel_fitted = np.array(final_velocity_results)
         acc_fitted = np.array(final_acceleration_results)
-        timestamps_fitted = np.arange(start_time, end_time, time_step)
         # else:
         #     traj_fitted_new = np.array(final_joint_results)
         #     vel_fitted_new = np.array(final_velocity_results)

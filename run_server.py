@@ -82,7 +82,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'pi05_pytorch', 'tao', 'dm05', 'wallx', 'starvla', 'xpolicylab'],
+    parser.add_argument('--model_type', type=str, choices=[model.value for model in ModelType],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')

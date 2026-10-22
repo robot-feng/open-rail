@@ -40,6 +40,7 @@ except ImportError:
     _HAS_YAML = False
 
 import uvicorn
+import websockets
 from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -1004,16 +1005,29 @@ async def patch_config(req: ConfigPatchRequest):
         return out
 
     flat = _flatten(req.patch)
-    if 'robots.type' in flat:
-        requested_type = _robot_type(flat['robots.type'])
+    if 'robots.type' in flat or 'visualize.host' in flat or 'visualize.port' in flat:
         with client_state.lock:
             if client_state.config_switching:
                 raise HTTPException(409, 'Configuration is switching. Please wait.')
             original = client_state.config
             old_type = original.robots.type
-            candidate = original.copy_and_resolve_references() if requested_type != old_type else None
-        if requested_type != old_type:
-            flat['robots.type'] = requested_type
+            requested_type = _robot_type(flat.get('robots.type', old_type))
+            host, port = _validated_visual_binding(
+                flat.get('visualize.host', original.visualize.host),
+                flat.get('visualize.port', original.visualize.port),
+            )
+            if 'visualize.host' in flat:
+                flat['visualize.host'] = host
+            if 'visualize.port' in flat:
+                flat['visualize.port'] = port
+            needs_restart = requested_type != old_type or any(
+                key in flat and flat[key] != original.visualize[key.split('.')[1]]
+                for key in ('visualize.host', 'visualize.port')
+            )
+            candidate = original.copy_and_resolve_references() if needs_restart else None
+        if needs_restart:
+            if 'robots.type' in flat:
+                flat['robots.type'] = requested_type
             _apply_flat_patch_new(candidate, flat)
             return await _replace_client_config(candidate, expected_config=original)
     vision_preprocess_keys = []
@@ -1133,8 +1147,25 @@ def _robot_type(value):
         raise HTTPException(400, f'Unsupported robot type: {value}')
 
 
+def _validated_visual_binding(host, port):
+    if not isinstance(host, str) or not host.strip():
+        raise HTTPException(400, 'visualize.host must be a non-empty string.')
+    try:
+        if isinstance(port, bool) or not isinstance(port, (int, str)):
+            raise ValueError
+        port = int(port)
+        if not 1 <= port <= 65535:
+            raise ValueError
+    except ValueError:
+        raise HTTPException(400, 'visualize.port must be an integer between 1 and 65535.')
+    return host.strip(), port
+
+
 async def _replace_client_config(candidate, path=None, expected_config=None):
     """Commit validated config and file together; defer hardware init to Observe."""
+    candidate.visualize.host, candidate.visualize.port = _validated_visual_binding(
+        candidate.visualize.host, candidate.visualize.port
+    )
     async with reset_resume_lock:
         with client_state.lock:
             if expected_config is not None and client_state.config is not expected_config:
@@ -2248,6 +2279,74 @@ async def websocket_endpoint(ws: WebSocket):
     finally:
         with client_state.ws_lock:
             client_state.ws_clients.discard(ws)
+
+
+@app.websocket("/visual-ws")
+async def visualization_websocket_proxy(ws: WebSocket):
+    """Relay camera and trajectory frames through the same port as the UI.
+
+    This keeps remote IDE/browser sessions from needing a separate forwarded
+    port for the VisualizeServer running inside the Open-RAIL process.
+    """
+    await ws.accept()
+    with client_state.lock:
+        config = client_state.config
+        visualize = getattr(config, "visualize", None)
+        port = int(getattr(visualize, "port", 8765))
+        max_size = int(getattr(visualize, "max_size", 10 * 1024 * 1024))
+        ping_interval = getattr(visualize, "ping_interval", 20)
+        ping_timeout = getattr(visualize, "ping_timeout", 10)
+
+    upstream_url = f"ws://127.0.0.1:{port}"
+    try:
+        async with websockets.connect(
+            upstream_url,
+            max_size=max_size,
+            ping_interval=ping_interval,
+            ping_timeout=ping_timeout,
+        ) as upstream:
+            async def browser_to_visualizer():
+                while True:
+                    message = await ws.receive()
+                    if message["type"] == "websocket.disconnect":
+                        return
+                    if message.get("text") is not None:
+                        await upstream.send(message["text"])
+                    elif message.get("bytes") is not None:
+                        await upstream.send(message["bytes"])
+
+            async def visualizer_to_browser():
+                async for message in upstream:
+                    if isinstance(message, bytes):
+                        await ws.send_bytes(message)
+                    else:
+                        await ws.send_text(message)
+
+            tasks = {
+                asyncio.create_task(browser_to_visualizer()),
+                asyncio.create_task(visualizer_to_browser()),
+            }
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+            for task in done:
+                error = task.exception()
+                if error and not isinstance(error, (WebSocketDisconnect, websockets.exceptions.ConnectionClosed)):
+                    logger.debug("Visualization WebSocket relay closed: %s", error)
+    except (WebSocketDisconnect, websockets.exceptions.ConnectionClosed):
+        pass
+    except Exception as error:
+        logger.warning("Visualization WebSocket relay to %s failed: %s", upstream_url, error)
+        try:
+            await ws.close(code=1013, reason="Visualization stream unavailable")
+        except RuntimeError:
+            pass
+    finally:
+        try:
+            await ws.close()
+        except RuntimeError:
+            pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -39,32 +39,37 @@ def get_agibot_g1_config():
     # non-ref cameras are fetched with a persistent thread pool
     config.camera.non_ref_fetch_workers = 2
     config.proprio_names = ['arm', 'hand' if 'hand' in config.hand_type else 'gripper', 'head', 'waist']
+    # A2D SDK 1.5.0 reports both head feedback angles in degrees. Convert them
+    # to radians in RobotBody so all RAIL state/action angular values use rad.
+    config.head_feedback_unit = 'degrees'
     config.gripper_freq = 40
     config.head_freq = 40
     config.manual_arm_interval = 0.01
+    # Default reset pose: pick_up_the_apple2 episode 0, frame 0 observation.state.
     config.action_layout = _ordered_config({
         'arm': {
             'start': 0, 'end': 14, 'policy': 'gradual',
             'presets': {
-                'left': {'Default': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869], 'Custom': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]},
-                'right': {'Default': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873], 'Custom': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]},
+                'left': {'Default': [-1.0741696358, 0.6110292077, 0.2795141041, -1.2838836908, 0.7304570079, 1.4952905178, -0.1875874996], 'Custom': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]},
+                'right': {'Default': [1.0742918253, -0.6111164689, -0.2795490026, 1.2839710712, -0.7304046154, -1.4954125881, 0.1876049638], 'Custom': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]},
             },
         },
         'gripper': {
             'start': 14, 'end': 16, 'policy': 'stepwise',
             'presets': {
                 'left': {'Default': [0.0], 'Custom': [0.5], 'Open': [0.0], 'Close': [1.0]},
-                'right': {'Default': [0.0], 'Custom': [0.5], 'Open': [0.0], 'Close': [1.0]},
+                'right': {'Default': [0.0018111111], 'Custom': [0.5], 'Open': [0.0], 'Close': [1.0]},
             },
         },
         # policy='manual' is robot/Web-only and must stay after all model policies.
         'head': {
             'start': 16, 'end': 18, 'policy': 'manual',
-            'presets': {'Default': [0.0, 0.4363], 'Custom': [0.0, 0.4363]},
+            'presets': {'Default': [0.0, 0.4363829195], 'Custom': [0.0, 0.4363]},
         },
         'waist': {
             'start': 18, 'end': 20, 'policy': 'manual',
-            'presets': {'Default': [0.4012, 27.0], 'Custom': [0.4012, 27.0]},
+            # RAIL state/action is [pitch rad, lift m]; RobotDds.move_waist uses [pitch rad, lift cm].
+            'presets': {'Default': [0.3490646183, 21.8039393425], 'Custom': [0.4012, 27.0]},
         },
         'wheel': {
             'start': 20, 'end': 22, 'policy': 'manual',

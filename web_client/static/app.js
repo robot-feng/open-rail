@@ -542,7 +542,7 @@ async function wireEvents() {
       applyVisualConfig(App.config);
       restoreConfigTreeState();
       requestAnimationFrame(restoreConfigTreeState);
-      if (res.requires_restart) toast('Robot type changed. Start Observe again.', 'info');
+      if (res.requires_restart) toast('Configuration changed. Start Observe again.', 'info');
       // Auto-save after apply
       const confRes = await apiFetch('/api/client/config/path');
       if (confRes.path) {

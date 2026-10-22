@@ -87,3 +87,6 @@ both the client and stateful policy interface are sequential.
 When the Open-Rail client resets, it sends a reset generation with the next
 inference request; the Open-Rail server forwards `reset()` to XPolicyLab once
 before processing that generation's first observation.
+The Open-Rail server serializes reset and inference for models exposing a
+`reset()` method. Run one active robot client per stateful policy server;
+policy history is shared by that server instance.

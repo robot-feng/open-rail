@@ -41,8 +41,7 @@ const WS_URL = `${WS_SCHEME}://${WS_HOSTNAME}${WS_PORT}/ws`;
 const RECONNECT = 3000;
 const WS_CONNECT_TIMEOUT_MS = 5000;
 
-// Visual WebSocket — connects to VisualizeServer (port 8765) for camera frames
-const CAM_WS_URL = `${WS_SCHEME}://${WS_HOSTNAME}:8765`;
+// Camera WebSocket uses visualize.port from the active Open-RAIL config.
 const CAM_WS_RECONNECT = 3000;
 const CAM_WS_CONNECT_TIMEOUT_MS = 5000;
 
@@ -106,7 +105,7 @@ const App = {
   currentFetchController: null,
   statusPollInFlight: false,
 
-  // Camera WebSocket (port 8765 — VisualizeServer)
+  // Camera WebSocket (port from active visualize config)
   camWs: null,
   camWsAlive: false,
   camWsReconnectTimer: null,

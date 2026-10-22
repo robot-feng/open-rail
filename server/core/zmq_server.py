@@ -31,6 +31,8 @@ class ZMQServer():
         # Create ROUTER socket for handling multiple clients
         self.router = self.context.socket(zmq.ROUTER)
         self.router.setsockopt(zmq.SNDHWM, 100)  # Set send buffer to 1 message
+        self.router.setsockopt(zmq.LINGER, 0)
+        self.router.setsockopt(zmq.RCVTIMEO, 100)
         self.router.bind(self.server_addr)
         
         # Client tracking
@@ -168,7 +170,11 @@ class ZMQServer():
             else:
                 self.logger.warning("Invalid message format received")
                 return None
+        except zmq.Again:
+            return None
         except Exception as e:
+            if not self._running:
+                return None
             self.logger.error(f"Error receiving message: {e}")
             import traceback
             traceback.print_exc()
@@ -248,6 +254,6 @@ class ZMQServer():
             self._monitor_thread.join(timeout=2)  # Wait up to 2 seconds for thread to finish
         if self._sender_thread:
             self._sender_thread.join(timeout=2)  # Wait up to 2 seconds for sender thread to finish
-        self.router.close()
+        self.router.close(linger=0)
         self.context.term()
         self.logger.info(f'ZMQ server closed, address was: {self.server_addr}')

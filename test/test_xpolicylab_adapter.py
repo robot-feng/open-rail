@@ -8,11 +8,14 @@ from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pytest
+from ml_collections import ConfigDict
 
+from server.core.vla_server import VLAServer
 from server.models.xpolicylab.xpolicylab import ModelVLA
 
 
 def _install_fake_client(monkeypatch, client_type):
+    monkeypatch.setattr(sys, "path", list(sys.path))
     package = ModuleType("client_server")
     package.__path__ = []
     ws_package = ModuleType("client_server.ws")
@@ -127,31 +130,51 @@ def test_reset_is_forwarded_to_the_xpolicylab_policy(monkeypatch, tmp_path):
 
 def test_reset_generation_is_applied_once_before_its_inference(monkeypatch, tmp_path):
     model = _make_model(monkeypatch, tmp_path)
+    server = VLAServer.__new__(VLAServer)
+    server.model = model
+    server._model_reset_lock = threading.Lock()
+    server._client_reset_generations = {}
     image = np.zeros((2, 2, 3), dtype=np.uint8)
 
-    first = model.infer_with_reset([_frame([1, 0, 0], image)], 0, b"robot-client")
-    repeated = model.infer_with_reset([_frame([2, 0, 0], image)], 0, b"robot-client")
-    next_episode = model.infer_with_reset([_frame([3, 0, 0], image)], 1, b"robot-client")
+    def infer(value, generation):
+        return server._infer_model(
+            [_frame([value, 0, 0], image)], b"robot-client", {"reset_generation": generation}
+        )
+
+    first = infer(1, 0)
+    repeated = infer(2, 0)
+    next_episode = infer(3, 1)
 
     assert model.client.reset_count == 2
     assert first["pred_action"][0, 0] == 1
     assert repeated["pred_action"][0, 0] == 2
     assert next_episode["pred_action"][0, 0] == 3
     with pytest.raises(ValueError, match="Stale reset_generation"):
-        model.infer_with_reset([_frame([4, 0, 0], image)], 0, b"robot-client")
+        infer(4, 0)
 
 
-def test_optional_case_preparation_is_forwarded(monkeypatch, tmp_path):
+@pytest.mark.parametrize("config_type", [dict, ConfigDict])
+def test_optional_case_preparation_is_forwarded(monkeypatch, tmp_path, config_type):
     _install_fake_client(monkeypatch, _FakePolicyClient)
     config = _config(tmp_path)
     config.update(
         action_case_id="case-7",
         prepare_case=True,
-        case_meta={"task": "pick-and-place"},
+        case_meta={"task": "pick-and-place", "options": {"seed": 7}},
     )
-    model = ModelVLA(config)
+    model = ModelVLA(config_type(config))
     assert model.client.kwargs["action_case_id"] == "case-7"
-    assert model.client.prepared_case == {"task": "pick-and-place"}
+    assert model.client.prepared_case == {"task": "pick-and-place", "options": {"seed": 7}}
+    assert type(model.client.prepared_case["options"]) is dict
+
+
+def test_none_disables_websocket_keepalive(monkeypatch, tmp_path):
+    _install_fake_client(monkeypatch, _FakePolicyClient)
+    config = _config(tmp_path)
+    config.update(ws_ping_interval_s=None, ws_ping_timeout_s=None)
+    model = ModelVLA(config)
+    assert model.client.kwargs["ws_ping_interval_s"] is None
+    assert model.client.kwargs["ws_ping_timeout_s"] is None
 
 
 def test_inference_transactions_are_serialized(monkeypatch, tmp_path):
@@ -214,8 +237,6 @@ def test_invalid_action_chunks_fail_clearly(monkeypatch, tmp_path):
 
 
 def test_server_resets_the_model_once_per_client_generation():
-    from server.core.vla_server import VLAServer
-
     class ResetSpy:
         calls = 0
 

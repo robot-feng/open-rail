@@ -165,18 +165,17 @@ python run_server.py --model_type tao \
 ### Start a StarVLA checkpoint
 
 Use the StarVLA runtime environment and point Open-Rail at the StarVLA source
-checkout. `STARVLA_ROOT` defaults to `/data/EvaClient-StarVLA/starVLA`; set it
-when the checkout is elsewhere. The checkpoint path is passed to StarVLA's
-`PolicyServerWrapper`, which loads the checkpoint's training configuration and
-normalization statistics.
+checkout. Set `STARVLA_ROOT` to the checkout's location. The checkpoint path is
+passed to StarVLA's `PolicyServerWrapper`, which loads the checkpoint's training
+configuration and normalization statistics.
 
 ```bash
 # Activate an environment with Open-Rail and the selected StarVLA dependencies.
-export STARVLA_ROOT=/data/EvaClient-StarVLA/starVLA
+export STARVLA_ROOT=/path/to/starvla
 python run_server.py --model_type starvla --model_path /path/to/starvla/checkpoint
 ```
 
-Before serving, set the ordered `camera_keys`, `send_state`, `unnorm_key`, and
+Before serving, set the ordered `camera_keys`, `send_state`, `normalize_state`, `unnorm_key`, and
 optional `config_overrides` in `conf/models_conf.py` to match the checkpoint's
 training contract. The adapter forwards RGB images and language, and returns
 the server's un-normalized action chunk without changing its joint order or
