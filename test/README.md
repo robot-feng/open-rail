@@ -16,6 +16,26 @@ suites, so it is excluded from Open-RAIL test discovery. Tests requiring its
 WebSocket implementation skip explicitly when that checkout or its protocol
 dependencies are unavailable.
 
+The dashboard has a separate real-browser regression check. It needs Node 22+
+and a local Chromium binary, with no npm packages or running robot/model server:
+
+```bash
+CHROMIUM_BIN=/usr/bin/chromium-browser node test/dashboard_browser.cjs
+# Optional screenshots from isolated mock data:
+UI_SCREENSHOT_DIR=/tmp/openrail-ui-preview node test/dashboard_browser.cjs
+```
+
+This check serves local frontend assets and mocks HTTP/WebSocket responses. It
+checks three workspace presets at eight desktop/tablet/mobile widths, browser
+preference persistence, stale telemetry, HTTP fallback for a silent open socket,
+camera expansion/Escape and focus restoration, chart controls, slider save counts,
+keyboard-inert hidden panels, and local asset loading. Display-only controls are
+also checked for unintended API mutations. Screenshots contain simulated data.
+
+The camera transport tests use the same-origin `/visual-ws` endpoint. The Python
+integration probe runs an isolated FastAPI relay with lifespan disabled, verifying
+JPEG integrity from a real visual server through the actual frontend handler.
+
 The suite runs without checkpoints or robot connections:
 
 | Area | Coverage |

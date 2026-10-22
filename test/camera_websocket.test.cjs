@@ -40,31 +40,31 @@ function browser(location = { protocol: 'http:', hostname: '127.0.0.1', port: '9
 }
 
 for (const port of [undefined, null, '', 0, -1, 65536, 1.5, 'invalid']) {
-  test(`invalid or absent port ${String(port)} uses the default`, () => {
+  test(`invalid or absent upstream port ${String(port)} still uses the same-origin relay`, () => {
     const page = browser();
     page.run(`App.config={visualize:{port:${JSON.stringify(port)}}}`);
-    assert.equal(page.run('getCamWsUrl()'), 'ws://127.0.0.1:8765/');
+    assert.equal(page.run('getCamWsUrl()'), 'ws://127.0.0.1:9000/visual-ws');
   });
 }
 
 for (const port of [1, 8877, '8877', 65535]) {
-  test(`configured port ${port} is used`, () => {
+  test(`upstream port ${port} is resolved by the relay, not the browser`, () => {
     const page = browser();
     page.run(`App.config={visualize:{port:${JSON.stringify(port)}}}`);
-    assert.equal(page.run('getCamWsUrl()'), `ws://127.0.0.1:${port}/`);
+    assert.equal(page.run('getCamWsUrl()'), 'ws://127.0.0.1:9000/visual-ws');
   });
 }
 
 test('HTTPS and IPv6 page origins produce a valid camera endpoint', () => {
   const page = browser({ protocol: 'https:', hostname: '[::1]', port: '9000' });
-  assert.equal(page.run('getCamWsUrl()'), 'wss://[::1]:8765/');
+  assert.equal(page.run('getCamWsUrl()'), 'wss://[::1]:9000/visual-ws');
 });
 
 test('default WebSocket ports are normalized and do not reconnect repeatedly', () => {
-  const page = browser();
+  const page = browser({ protocol: 'http:', hostname: '127.0.0.1', port: '' });
   page.run('App.config={visualize:{port:80}}; connectCamWS(); connectCamWS()');
   assert.equal(page.sockets.length, 1);
-  assert.equal(page.sockets[0].url, 'ws://127.0.0.1/');
+  assert.equal(page.sockets[0].url, 'ws://127.0.0.1/visual-ws');
 });
 
 test('both pending and open connections are reused for the same configuration', () => {
@@ -77,18 +77,18 @@ test('both pending and open connections are reused for the same configuration', 
   assert.equal(page.run('App.camWsAlive'), true);
 });
 
-test('a configuration arriving after startup replaces the old pending connection', () => {
+test('an upstream configuration change does not replace the browser relay connection', () => {
   const page = browser();
   page.run('connectCamWS(); App.config={visualize:{port:8877}}; connectCamWS()');
-  const [oldSocket, current] = page.sockets;
-  assert.equal(oldSocket.readyState, 3);
-  for (const event of ['onopen', 'onclose', 'onerror']) assert.equal(oldSocket[event], null);
-  assert.equal(current.url, 'ws://127.0.0.1:8877/');
+  assert.equal(page.sockets.length, 1);
+  const [current] = page.sockets;
+  assert.equal(current.readyState, 0);
+  assert.equal(current.url, 'ws://127.0.0.1:9000/visual-ws');
   assert.equal(page.timers.size, 1);
   assert.equal(current.binaryType, 'arraybuffer');
 });
 
-test('automatic reconnect reads the latest port', () => {
+test('automatic reconnect returns to the same-origin relay', () => {
   const page = browser();
   page.run('App.isRunning=true; connectCamWS()');
   page.sockets[0].open();
@@ -96,7 +96,7 @@ test('automatic reconnect reads the latest port', () => {
   assert.equal(page.run('App.camWsAlive'), false);
   page.run('App.config={visualize:{port:8878}}');
   page.fireTimer([...page.timers.keys()][0]);
-  assert.equal(page.sockets[1].url, 'ws://127.0.0.1:8878/');
+  assert.equal(page.sockets[1].url, 'ws://127.0.0.1:9000/visual-ws');
 });
 
 test('manual disconnect cancels connection and reconnect timers', () => {

@@ -159,24 +159,24 @@ function createUnifiedChart() {
         x: {
           type: 'linear',
           title: { display: false },
-          ticks: { maxTicksLimit: 8, color: '#656d76', font: { size: 9 } },
+          ticks: { maxTicksLimit: 8, color: '#66768c', font: { size: 11 } },
           grid: { color: 'rgba(208,215,222,.5)' },
         },
         y: {
-          title: { display: true, text: 'rad', color: '#656d76', font: { size: 9 } },
-          ticks: { maxTicksLimit: 6, color: '#656d76', font: { size: 9 } },
+          title: { display: true, text: 'rad', color: '#66768c', font: { size: 11 } },
+          ticks: { maxTicksLimit: 6, color: '#66768c', font: { size: 11 } },
           grid: { color: 'rgba(208,215,222,.5)' },
         },
       },
       plugins: {
         legend: {
-          display: true,
+          display: false,
           position: 'right',
           labels: {
             usePointStyle: true,
             pointStyle: 'line',
             padding: 8,
-            font: { size: 9 },
+            font: { size: 11 },
             color: '#1f2328',
             boxWidth: 20,
             generateLabels(chart) {
@@ -239,7 +239,9 @@ async function renderJointSelector() {
   rowR.querySelectorAll('.joint-sel-chip').forEach(el => el.remove());
 
   for (let i = 0; i < count; i++) {
-    const chip = document.createElement('span');
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.setAttribute('aria-label', `Toggle joint ${labels[i] ?? `J${i}`}`);
     const color = getTrajJointColor(i);
     chip.className = 'joint-sel-chip' + (t.selectedJoints.has(i) ? ' active' : '');
     chip.textContent = labels[i] ?? `J${i}`;
@@ -286,6 +288,7 @@ async function renderJointSelector() {
 
 /** Apply colour styling to a chip based on active state */
 function _applyChipColor(chip, active, color) {
+  chip.setAttribute('aria-pressed', String(active));
   if (active) {
     chip.style.borderColor = color;
     chip.style.color       = color;
@@ -333,6 +336,8 @@ function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampS
 
   const t = App.traj;
   const nowSec = Number.isFinite(Number(timestampSec)) ? Number(timestampSec) : (Date.now() / 1000);
+  t.lastReceivedAt ??= {};
+  const receivedAt = Date.now();
   if (t.startTimeSec == null) t.startTimeSec = nowSec;
 
   let x = nowSec - t.startTimeSec;
@@ -341,14 +346,17 @@ function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampS
   t.lastX = x;
 
   if (stateSeries.length > 0) {
+    t.lastReceivedAt.state = receivedAt;
     t.buffer.state.push({ x, joints_y: stateSeries });
     trimTrajBufferToMaxWindow('state', x);
   }
   if (actionFittedSeries.length > 0) {
+    t.lastReceivedAt.action_fitted = receivedAt;
     t.buffer.action_fitted.push({ x, joints_y: actionFittedSeries });
     trimTrajBufferToMaxWindow('action_fitted', x);
   }
   if (actionRawSeries.length > 0) {
+    t.lastReceivedAt.action_raw = receivedAt;
     t.buffer.action_raw.push({ x, joints_y: actionRawSeries });
     trimTrajBufferToMaxWindow('action_raw', x);
   }
@@ -552,12 +560,16 @@ function syncCenterPanelCollapseUi() {
     // Language panel: swap icons for Collapse/Expand as requested.
     langBtn.innerHTML = langCollapsed ? '<i class="fas fa-chevron-down"></i>' : '<i class="fas fa-chevron-up"></i>';
     langBtn.title = langCollapsed ? 'Expand' : 'Collapse';
+    langBtn.setAttribute('aria-expanded', String(!langCollapsed));
+    langBtn.setAttribute('aria-label', `${langCollapsed ? 'Expand' : 'Collapse'} language commands`);
   }
 
   if (trajBtn && trajBody) {
     const trajCollapsed = trajBody.classList.contains('collapsed');
     trajBtn.innerHTML = trajCollapsed ? '<i class="fas fa-chevron-up"></i>' : '<i class="fas fa-chevron-down"></i>';
     trajBtn.title = trajCollapsed ? 'Expand' : 'Collapse';
+    trajBtn.setAttribute('aria-expanded', String(!trajCollapsed));
+    trajBtn.setAttribute('aria-label', `${trajCollapsed ? 'Expand' : 'Collapse'} trajectories`);
   }
 }
 
@@ -688,13 +700,14 @@ async function setupTrajPanel() {
   // syncSrcButtons(updateConfig=false);
 
   const windowSlider = $('traj-window-span-slider');
-  const applyWindowSpan = async (raw) => {
+  const applyWindowSpan = async (raw, persist = false) => {
     const next = normalizeTrajWindowSpanSec(Number(raw), App.traj.windowSpanSec);
     App.traj.windowSpanSec = next;
     syncTrajWindowSpanUI();
     if (App.traj.source.size > 0) recomputeTrajXWindow();
     App.traj.dirty = true;
     refreshUnifiedChart();
+    if (!persist) return;
     const patch = getTrajWindowSpanStatePatch();
     const patchRes = await apiFetch('/api/client/config/patch', {
       method: 'POST',
@@ -712,7 +725,10 @@ async function setupTrajPanel() {
   };
   if (windowSlider) {
     windowSlider.addEventListener('input', e => applyWindowSpan(e.target.value));
-    windowSlider.addEventListener('change', e => applyWindowSpan(e.target.value));
+    windowSlider.addEventListener('change', e => {
+      // Persist once on release, rather than writing the YAML file on every drag tick.
+      applyWindowSpan(e.target.value, true).catch(() => { /* apiFetch reports the error */ });
+    });
   }
   // syncTrajWindowSpanUI();
 
@@ -752,6 +768,7 @@ async function setupTrajPanel() {
 
   // Clear
   $('btn-traj-clear').addEventListener('click', () => {
+    App.traj.lastReceivedAt = {};
     App.traj.buffer = { state: [], action_fitted: [], action_raw: [] };
     App.traj.startTimeSec = null;
     App.traj.lastX = 0;

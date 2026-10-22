@@ -1,7 +1,9 @@
 // ═══════════════════════════════════════════════════════
 //  Stats rendering
 // ═══════════════════════════════════════════════════════
-function renderStats(data) {
+function renderStats(data, transport = 'http') {
+  if (!data || typeof data.running !== 'boolean') return;
+  noteDashboardStats(transport);
   App.isObserveRunning = !!(data?.observe_running ?? (data?.running && !data?.paused));
   App.isInferenceRunning = !!(data?.inference_running ?? (data?.running && !data?.paused));
   App.isControlRunning = !!(data?.control_running ?? (data?.running && !data?.paused));
@@ -290,21 +292,6 @@ function setRunningUI(running, paused = false) {
       disconnectCamWS();
     }
 
-    // Status badge
-    let badgeText, badgeClass;
-    if (!running) {
-      badgeText  = 'STOPPED';
-      badgeClass = 'stopped';
-    } else if (paused) {
-      badgeText  = 'PAUSED';
-      badgeClass = 'paused';
-    } else {
-      badgeText  = 'RUNNING';
-      badgeClass = 'running';
-    }
-    $('status-badge').textContent = badgeText;
-    $('status-badge').className   = `status-badge ${badgeClass}`;
-
     if (!running) {
       App.isRecording = false;
       App.isRecordingPaused = false;
@@ -312,6 +299,7 @@ function setRunningUI(running, paused = false) {
     syncRecordingSwitchUI();
   }
 
+  renderDashboardRuntimeBadge();
   syncStartPauseButtons(running, paused);
   $('btn-reset').disabled = !running;             // available in both running states
   setThreadControlUI();
@@ -795,7 +783,7 @@ async function wireEvents() {
 // ═══════════════════════════════════════════════════════
 function startStatusPoll() {
   setInterval(async () => {
-    if (App.wsAlive || App.statusPollInFlight) return;
+    if (App.statusPollInFlight || (App.wsAlive && hasFreshDashboardStats())) return;
     App.statusPollInFlight = true;
     try {
       const json = await apiFetch('/api/client/status', { timeoutMs: 3000, suppressToast: true });
@@ -823,4 +811,5 @@ document.addEventListener('DOMContentLoaded', () => {
   buildJointSelector();                  // build from the active robot action_layout
   connectWS();
   startStatusPoll();
+  setupDashboard();
 });

@@ -59,23 +59,21 @@ const DEFAULT_TRAJ_UPDATE_MS = 50;
 
 // Base per-joint colour palette; extra joints get generated colours at runtime.
 const JOINT_COLORS = [
-  // L0-L6: High contrast bright colors
-  'rgb(220, 20, 60)',   // L0 - Crimson red
-  'rgb(255, 140, 0)',   // L1 - Dark orange
-  'rgb(255, 0, 255)',   // L2 - Magenta (changed from purple for better contrast)
-  'rgb(0, 150, 0)',     // L3 - Forest green (changed from green for better contrast)
-  'rgb(0, 70, 255)',    // L4 - Strong blue (changed from blue for better contrast)
-  'rgb(75, 0, 130)',    // L5 - Indigo
-  'rgb(186, 85, 211)',  // L6 - Medium purple (changed from violet for better contrast)
-  
-  // R0-R6: Contrasting colors from the first set
-  'rgb(0, 191, 255)',   // R0 - Deep sky blue (changed from magenta to avoid repetition)
-  'rgb(255, 20, 147)',  // R1 - Deep pink
-  'rgb(139, 69, 19)',   // R2 - Saddle brown (changed from brown for better contrast)
-  'rgb(184, 134, 11)',  // R3 - Dark goldenrod (changed from olive for better contrast)
-  'rgb(0, 128, 128)',   // R4 - Teal
-  'rgb(160, 32, 240)',  // R5 - Purple (changed from sienna for better contrast)
-  'rgb(255, 105, 180)', // R6 - Hot pink (changed from crimson to ensure uniqueness)
+  // Distinct hues on a light surface; joint labels provide a second identifier.
+  'rgb(208, 72, 88)',    // L0 - rose
+  'rgb(191, 112, 30)',   // L1 - amber
+  'rgb(139, 81, 185)',   // L2 - violet
+  'rgb(38, 137, 100)',   // L3 - green
+  'rgb(49, 103, 207)',   // L4 - blue
+  'rgb(93, 86, 161)',    // L5 - indigo
+  'rgb(170, 78, 139)',   // L6 - berry
+  'rgb(21, 145, 180)',   // R0 - cyan
+  'rgb(196, 89, 123)',   // R1 - pink
+  'rgb(150, 103, 71)',   // R2 - umber
+  'rgb(148, 127, 31)',   // R3 - ochre
+  'rgb(29, 133, 133)',   // R4 - teal
+  'rgb(112, 92, 197)',   // R5 - purple
+  'rgb(175, 86, 57)',    // R6 - terracotta
 ];
 
 // ═══════════════════════════════════════════════════════

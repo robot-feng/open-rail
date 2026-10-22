@@ -91,8 +91,10 @@ function restoreExpandedCamera() {
   view.placeholder.replaceWith(view.item);
   view.preview.title = 'Double-click to expand';
   view.preview.setAttribute('aria-expanded', 'false');
+  view.item.querySelector('.cam-expand')?.setAttribute('aria-expanded', 'false');
   $('camera-body').scrollTop = view.scrollTop;
-  view.preview.focus({ preventScroll: true });
+  const focusTarget = view.opener?.isConnected && view.item.contains(view.opener) ? view.opener : view.preview;
+  focusTarget.focus({ preventScroll: true });
   camState.expandedView = null;
 }
 
@@ -110,12 +112,13 @@ function toggleExpandedCamera(idx) {
   const preview = $(`cam-preview-${idx}`);
   const item = preview.closest('.cam-item');
   const placeholder = document.createComment('camera position');
-  camState.expandedView = { item, preview, placeholder, scrollTop: $('camera-body').scrollTop };
+  camState.expandedView = { item, preview, placeholder, opener: document.activeElement, scrollTop: $('camera-body').scrollTop };
   item.replaceWith(placeholder);
   dialog.appendChild(item);
   dialog.setAttribute('aria-label', `${CAM_NAMES[idx]} live camera`);
   preview.title = 'Double-click or press Esc to return';
   preview.setAttribute('aria-expanded', 'true');
+  item.querySelector('.cam-expand')?.setAttribute('aria-expanded', 'true');
   dialog.showModal();
   item.querySelector('.cam-exit-expanded').focus();
 }
@@ -161,6 +164,9 @@ function updateLayoutColumns() {
 
   layout.classList.toggle('left-collapsed', leftCollapsed);
   layout.classList.toggle('right-collapsed', visualCollapsed);
+  // Hidden sidebars must also leave the keyboard tab order.
+  $('left-col').inert = leftCollapsed;
+  $('panel-visual').inert = visualCollapsed;
 
   // Clear any legacy inline styles from previous implementations.
   layout.style.gridTemplateColumns = '';

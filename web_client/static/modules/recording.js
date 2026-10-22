@@ -754,10 +754,12 @@ function setupLeftPanelAccordion() {
       body.classList.toggle('collapsed', !expanded);
       panel?.classList.toggle('panel-expanded', expanded);
       if (btn) {
-        const isConfigBtn = btnId === 'btn-config-collapse';
-        btn.innerHTML = isConfigBtn
-          ? (expanded ? '<i class="fas fa-chevron-up"></i>' : '<i class="fas fa-chevron-down"></i>')
-          : (expanded ? '<i class="fas fa-chevron-down"></i>' : '<i class="fas fa-chevron-up"></i>');
+        btn.innerHTML = expanded ? '<i class="fas fa-chevron-up"></i>' : '<i class="fas fa-chevron-down"></i>';
+        btn.setAttribute('aria-expanded', String(expanded));
+        btn.setAttribute('aria-controls', bodyId);
+        const panelName = $(panelId)?.querySelector('.panel-header > span')?.textContent.trim() || 'panel';
+        btn.title = `${expanded ? 'Collapse' : 'Expand'} ${panelName}`;
+        btn.setAttribute('aria-label', btn.title);
       }
     });
 

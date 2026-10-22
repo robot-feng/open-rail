@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Open-RAIL Web Client</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-  <!-- Font Awesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <link rel="stylesheet" href="/static/styles/main.css?v=20261014-camera-expand-1" />
+  <!-- Local icons work on isolated robot networks. -->
+  <link rel="stylesheet" href="/static/styles/icons.css?v=20261023-workspace-review" />
+  <link rel="stylesheet" href="/static/styles/main.css?v=20261023-workspace-review" />
+  <link rel="stylesheet" href="/static/styles/dashboard.css?v=20261023-workspace-review" />
 </head>
 <body>
 
   <!-- ═══════════════════ TOP BAR ═══════════════════ -->
   <header class="topbar">
     <div class="topbar-left">
-      <div id="status-badge" class="status-badge stopped">STOPPED</div>
+      <div id="status-badge" class="status-badge stopped" role="status">CONNECTING</div>
       <button class="btn btn-xs topbar-shortcuts-button" id="btn-shortcuts" type="button" aria-haspopup="dialog" aria-controls="shortcuts-popover" aria-expanded="false">⌨ Shortcuts</button>
       <div id="shortcuts-popover" class="shortcuts-popover hidden" role="dialog" aria-labelledby="shortcuts-popover-title">
         <div class="shortcuts-popover-header">
@@ -43,7 +44,7 @@
     <div class="topbar-center">
       <a class="logo" id="topbar-logo" href="https://arxiv.org/abs/2512.24673" target="_blank" rel="noopener noreferrer" title="Open-RAIL — Paper: arXiv:2512.24673 (opens in new tab)" aria-label="Open-RAIL — arXiv:2512.24673 (opens in new tab)">Open-RAIL</a>
 
-      <span class="subtitle">VLA/WAM Client Dashboard</span>
+      <span class="subtitle">ROBOT OPERATIONS</span>
     </div>
     <div class="topbar-right">
       <!-- Resource monitoring pills moved to topbar-right, positioned before WS indicator -->
@@ -95,6 +96,19 @@
       </div>
     </div>
   </header>
+
+  <section class="workspace-bar" aria-label="Workspace display settings">
+    <div class="workspace-heading">
+      <h1>Control workspace</h1>
+      <span id="workspace-context">Waiting for configuration</span>
+    </div>
+    <div class="view-switch" role="group" aria-label="Workspace view">
+      <button type="button" data-workspace-view="overview" aria-pressed="true" title="Show configuration, telemetry and cameras">Overview</button>
+      <button type="button" data-workspace-view="analysis" aria-pressed="false" title="Give trajectories the full workspace">Analysis</button>
+      <button type="button" data-workspace-view="vision" aria-pressed="false" title="Give camera feeds more room">Vision</button>
+    </div>
+    <div class="telemetry-health" id="telemetry-health" role="status"><span class="health-dot"></span><span id="telemetry-health-text">Connecting to telemetry…</span></div>
+  </section>
 
   <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
   <main class="layout">
@@ -392,34 +406,34 @@
         <div class="panel-body">
 
           <!-- Stats inline bar -->
-          <div class="section-title">Key Statistics</div>
+          <div class="monitor-caption"><span>LIVE TELEMETRY</span><span id="telemetry-age">Awaiting first update</span></div>
           <div class="stats-inline">
             <div class="stat-inline-item">
-              <div class="stat-inline-label">Observe FPS</div>
+              <div class="stat-inline-label">Observation</div>
               <div class="stat-inline-value" id="val-obv-fps">–</div>
             </div>
             <div class="stat-inline-item">
-              <div class="stat-inline-label">Infer Count</div>
+              <div class="stat-inline-label">Inferences</div>
               <div class="stat-inline-value" id="val-infer-count">–</div>
             </div>
             <div class="stat-inline-item">
-              <div class="stat-inline-label">Img Proc Time</div>
+              <div class="stat-inline-label">Image processing</div>
               <div class="stat-inline-value" id="img-proc-time">–</div>
             </div>
             <div class="stat-inline-item">
-              <div class="stat-inline-label">Avg Infer Time</div>
+              <div class="stat-inline-label">Inference latency</div>
               <div class="stat-inline-value" id="val-infer-time">–</div>
             </div>
             <div class="stat-inline-item">
-              <div class="stat-inline-label">Intra Chunk Time</div>
+              <div class="stat-inline-label">Intra-chunk</div>
               <div class="stat-inline-value" id="val-intra-chunk-time">–</div>
             </div>
             <div class="stat-inline-item">
-              <div class="stat-inline-label">Inter Chunk Time</div>
+              <div class="stat-inline-label">Inter-chunk</div>
               <div class="stat-inline-value" id="val-inter-chunk-time">–</div>
             </div>
             <div class="stat-inline-item">
-              <div class="stat-inline-label">Avg Net Latency</div>
+              <div class="stat-inline-label">Network latency</div>
               <div class="stat-inline-value" id="val-net-latency">–</div>
             </div>
           </div>
@@ -471,22 +485,24 @@
             <!-- Task selector (level-1) -->
             <div class="lang-cmd-col">
               <div class="section-title">Task</div>
-              <select id="lang-task-select" class="lang-cmd-select" size="5"></select>
+              <select id="lang-task-select" class="lang-cmd-select" size="5" aria-label="Task"></select>
+              <span class="select-empty-hint">No tasks loaded</span>
             </div>
             <!-- Sub-task selector (level-2) -->
             <div class="lang-cmd-col lang-cmd-col-subtask">
               <div class="section-title">Sub-Task</div>
-              <select id="lang-subtask-select" class="lang-cmd-select" size="5"></select>
+              <select id="lang-subtask-select" class="lang-cmd-select" size="5" aria-label="Sub-task"></select>
+              <span class="select-empty-hint">Select a task to see its steps</span>
             </div>
             <!-- Current instruction + send -->
             <div class="lang-cmd-col lang-cmd-col-send">
               <div class="section-title">Instruction</div>
-              <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…" disabled></textarea>
+              <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" aria-label="Robot instruction" placeholder="Select a task, then review or edit its instruction…" disabled></textarea>
               <div class="lang-cmd-btn-row">
-                <button class="btn btn-sm" id="btn-lang-edit" title="Update the selected sub-task instruction"><i class="fas fa-rotate"></i> Upd</button>
+                <button class="btn btn-sm" id="btn-lang-edit" title="Update the selected sub-task instruction"><i class="fas fa-rotate"></i> Update</button>
                 <button class="btn btn-sm" id="btn-lang-add" title="Add a new sub-task to the current task"><i class="fas fa-plus"></i> Add</button>
                 <button class="btn btn-sm" id="btn-lang-del" title="Delete the selected sub-task from the current task"><i class="fas fa-xmark"></i> Del</button>
-                <button class="btn btn-sm" id="btn-lang-send" title="Send the instruction to the VLA server"><i class="fas fa-check"></i> Apply</button>
+                <button class="btn btn-sm btn-primary" id="btn-lang-send" title="Send instruction (Ctrl+Enter)"><i class="fas fa-check"></i> Apply</button>
               </div>
             </div>
           </div>
@@ -565,10 +581,17 @@
           </div>
         </div>
         <div class="traj-body" id="traj-body">
+          <div class="chart-toolbar">
+            <span id="chart-summary">Waiting for trajectory data</span>
+            <div><button class="btn btn-xs" id="btn-chart-legend" type="button" aria-pressed="false">Legend</button>
+            <button class="btn btn-xs" id="btn-chart-reset" type="button" title="Reset chart zoom and pan">Reset zoom</button></div>
+          </div>
           <!-- Single unified chart canvas -->
           <div class="traj-chart-wrap" id="traj-chart-wrap">
-            <canvas id="traj-canvas"></canvas>
+            <canvas id="traj-canvas" role="img" aria-label="Joint position trajectories over time"></canvas>
+            <div class="chart-empty" id="chart-empty"><span class="empty-chart-icon" aria-hidden="true">∿</span><strong id="chart-empty-title">Ready to visualize</strong><span id="chart-empty-description">Start observation, then play the trajectory stream.</span></div>
           </div>
+          <div class="chart-footnote"><span>Joint position · rad</span><span>Ctrl + scroll to zoom · Shift + drag to pan</span></div>
         </div>
       </section>
 
@@ -643,7 +666,7 @@
   </footer>
 
   <!-- ═══════════════════ TOAST ═══════════════════ -->
-  <div id="toast-container" class="toast-container"></div>
+  <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
 
   <dialog id="camera-expanded" class="camera-expanded" aria-label="Expanded camera view"></dialog>
 
@@ -675,16 +698,17 @@
   <script src="/visual/vlib/chart.js"></script>
   <script src="/visual/vlib/hammer.min.js"></script>
   <script src="/visual/vlib/chartjs-plugin-zoom.min.js"></script>
-  <script src="/static/constants.js"></script>
+  <script src="/static/constants.js?v=20261023-workspace-review"></script>
   <script src="/static/modules/utils.js?v=20261014-request-timeout-1"></script>
-  <script src="/static/modules/websocket.js?v=20261022-same-origin-visual-ws"></script>
-  <script src="/static/modules/camera.js?v=20261014-camera-expand-1"></script>
-  <script src="/static/modules/trajectory.js"></script>
+  <script src="/static/modules/websocket.js?v=20261023-workspace-review"></script>
+  <script src="/static/modules/camera.js?v=20261023-workspace-review"></script>
+  <script src="/static/modules/trajectory.js?v=20261023-workspace-review"></script>
   <script src="/static/modules/config.js"></script>
   <script src="/static/modules/image-overlay.js?v=20261014-overlay-retry-5"></script>
   <script src="/static/modules/language.js?v=20260924-shortcuts-popover-1"></script>
-  <script src="/static/modules/recording.js?v=20261014-overlay-controls-2"></script>
+  <script src="/static/modules/recording.js?v=20261023-workspace-review"></script>
   <script src="/static/modules/manual-control.js?v=20260924-preset-selection-2"></script>
-  <script src="/static/app.js?v=20260924-shortcuts-popover-1"></script>
+  <script src="/static/modules/dashboard.js?v=20261023-workspace-review"></script>
+  <script src="/static/app.js?v=20261023-workspace-review"></script>
 </body>
 </html>

@@ -107,7 +107,7 @@ function disconnectCamWS() {
 
 function handleWSMessage(msg) {
   switch (msg.type) {
-    case 'stats':  renderStats(msg.data); break;
+    case 'stats':  renderStats(msg.data, 'ws'); break;
     case 'status':
       if (msg?.data) {
         if (typeof msg.data.observe_running === 'boolean') App.isObserveRunning = msg.data.observe_running;
