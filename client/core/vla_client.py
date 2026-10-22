@@ -142,6 +142,7 @@ class VLAClient():
         # Inference variables
         self.set_observe_period(speed=self.config.controller.speed)
         self._request_id = 0
+        self._model_reset_generation = 0
         self.inference_error = None
         self.inference_error_count = 0
 
@@ -426,6 +427,7 @@ class VLAClient():
         # Prevent an in-flight inference from publishing stale actions or timing
         # measurements after Reset clears the data manager.
         with self._inference_execution_lock:
+            self._model_reset_generation += 1
             self.realtime_data_manager.clear()
             self._clear_raw_observe_queue()
             self.image_process_time = 0.0
@@ -1095,7 +1097,11 @@ class VLAClient():
                     frame['obs']['language'] = [language]
         request_id = self._next_request_id()
         # start_time = time.time()
-        if not self.vla_zmq.sendMessage(data, meta={'request_id': request_id}):
+        meta = {
+            'request_id': request_id,
+            'reset_generation': getattr(self, '_model_reset_generation', 0),
+        }
+        if not self.vla_zmq.sendMessage(data, meta=meta):
             return None
         # end_time = time.time()
         # print(f"Debug: Net Time = {(end_time - start_time) * 1000} ms")

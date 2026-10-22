@@ -108,6 +108,8 @@ Smoothing happens at the **framework level** — no model changes, no training a
 | SmolVLA | SmolVLA | ✅ Supported | `server/models/smolvla/` |
 | GO1 | AgiBot GO-1 | ✅ Supported | `server/models/go1/` |
 | π series | π0, π0.5 | ✅ Supported | `server/models/openpi/` |
+| StarVLA | StarVLA framework checkpoints | ✅ Supported | `server/models/starvla/` |
+| XPolicyLab | Any XPolicyLab policy served through its common WebSocket interface | ✅ Supported | `server/models/xpolicylab/` |
 | DM0.5 | DM0.5 | ✅ Supported | `server/models/dm05/` |
 | WALL-X | Wall-OSS-0.5 | ✅ Supported | `server/models/wallx/` |
 | _Your model_ | — | 🔜 [Integration guide](docs/guides/add-new-model.md) | — |
@@ -159,6 +161,61 @@ python run_server.py --model_type tao \
 ```
 
 </details>
+
+### Start a StarVLA checkpoint
+
+Use the StarVLA runtime environment and point Open-Rail at the StarVLA source
+checkout. `STARVLA_ROOT` defaults to `/data/EvaClient-StarVLA/starVLA`; set it
+when the checkout is elsewhere. The checkpoint path is passed to StarVLA's
+`PolicyServerWrapper`, which loads the checkpoint's training configuration and
+normalization statistics.
+
+```bash
+# Activate an environment with Open-Rail and the selected StarVLA dependencies.
+export STARVLA_ROOT=/data/EvaClient-StarVLA/starVLA
+python run_server.py --model_type starvla --model_path /path/to/starvla/checkpoint
+```
+
+Before serving, set the ordered `camera_keys`, `send_state`, `unnorm_key`, and
+optional `config_overrides` in `conf/models_conf.py` to match the checkpoint's
+training contract. The adapter forwards RGB images and language, and returns
+the server's un-normalized action chunk without changing its joint order or
+action semantics. See [`server/models/starvla/README.md`](server/models/starvla/README.md).
+
+### Start an XPolicyLab policy
+
+XPolicyLab runs its selected policy and checkpoint in a separate policy server.
+The Open-Rail adapter connects to that server over XPolicyLab's WebSocket
+protocol, so model-specific dependencies stay in the XPolicyLab environment.
+Initialize the bundled XPolicyLab checkout as a submodule and install the
+lightweight WebSocket client extras in the Open-Rail environment:
+
+```bash
+git submodule update --init --recursive
+pip install -e ".[xpolicylab]"
+```
+
+In the XPolicyLab environment, start the desired policy server from the
+XPolicyLab checkout, using that policy's `deploy.yml` and checkpoint setup:
+
+```bash
+cd test/XPolicyLab
+python -m client_server.ws --config_path policy/<POLICY>/deploy.yml --host 0.0.0.0 --port 19000
+```
+
+Then start Open-Rail and point it to the same host/port:
+
+```bash
+python run_server.py --model_type xpolicylab
+```
+
+Set `models.xpolicylab.server_url`, `camera_map`, `state_fields`, and the
+ordered `action_keys` in `conf/models_conf.py` for the chosen XPolicyLab policy
+and robot; set `expected_action_dim` to validate the output width. The defaults
+map a 16-D bimanual arm/gripper vector. XPolicyLab
+policy servers return action dictionaries; Open-Rail concatenates the
+configured fields into each action row in `pred_action`. See
+[`server/models/xpolicylab/README.md`](server/models/xpolicylab/README.md).
 
 ### 4. Start the web client
 

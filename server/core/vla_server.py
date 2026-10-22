@@ -48,6 +48,8 @@ class VLAServer:
         self.image_decode_executor = ThreadPoolExecutor(max_workers=config.max_decode_workers)
         # Create lock to protect shared variables
         self.thread_lock = threading.Lock()
+        self._model_reset_lock = threading.Lock()
+        self._client_reset_generations = {}
         
         self.receive_thread = threading.Thread(target=self.recvThreadFun, daemon=True)
 
@@ -136,6 +138,22 @@ class VLAServer:
         #     encoded_imgs[key] = encoded_img
 
         return results
+
+    def _reset_model_for_request(self, client_id, meta):
+        """Apply a client reset once before its first inference in that generation."""
+        if not isinstance(meta, dict) or 'reset_generation' not in meta:
+            return
+        generation = meta['reset_generation']
+        if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
+            raise ValueError(f"Invalid reset_generation in request metadata: {generation!r}")
+
+        with self._model_reset_lock:
+            if self._client_reset_generations.get(client_id) == generation:
+                return
+            reset = getattr(self.model, 'reset', None)
+            if callable(reset):
+                reset()
+            self._client_reset_generations[client_id] = generation
     
     def inference(self, client_id, data, meta=None):
         """Process inference request with image decoding and model inference
@@ -182,10 +200,17 @@ class VLAServer:
             # Submit inference task to thread pool with timing
             # inference_start_time = time.time()
             model_data = data if isinstance(data, list) else [data]
+            infer_with_reset = getattr(self.model, 'infer_with_reset', None)
+            if callable(infer_with_reset) and isinstance(meta, dict) and 'reset_generation' in meta:
+                future = self.executor.submit(
+                    infer_with_reset, model_data, meta['reset_generation'], client_id
+                )
+            else:
+                self._reset_model_for_request(client_id, meta)
+                future = self.executor.submit(self.model.infer, model_data)
             # for idx, item in enumerate(model_data):
             #     for k, v in item.get('obs', {}).items():
             #         print(f"Debug: model_data[{idx}]['obs']['{k}'] dtype: {getattr(v, 'dtype', type(v))}")
-            future = self.executor.submit(self.model.infer, model_data)
             future.add_done_callback(lambda f: self.inference_callback(f, client_id=client_id, start_time=image_decode_time, meta=meta))
             for key, value in model_data[0]['obs'].items():
                 if 'cam.' in key:
@@ -200,7 +225,7 @@ class VLAServer:
             print(f"Error processing inference queue: {e}")
             import traceback
             traceback.print_exc()
-    
+
     def inference_callback(self, future, client_id, start_time, meta=None):
         """Callback function for handling inference results
         

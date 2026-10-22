@@ -107,6 +107,8 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | SmolVLA | SmolVLA | ✅ 已支持 | `server/models/smolvla/` |
 | GO1 | 智元 GO-1 | ✅ 已支持 | `server/models/go1/` |
 | π 系列 | π0、π0.5 | ✅ 已支持 | `server/models/openpi/` |
+| StarVLA | StarVLA 框架 checkpoint | ✅ 已支持 | `server/models/starvla/` |
+| XPolicyLab | 通过统一 WebSocket 接口部署的 XPolicyLab 策略 | ✅ 已支持 | `server/models/xpolicylab/` |
 | TAO | TAO | ✅ 已支持 | `server/models/tao/` |
 | DM0.5 | DM0.5 | ✅ 已支持 | `server/models/dm05/` |
 | WALL-X | WALL-X | ✅ 已支持 | `server/models/wallx/` |
@@ -136,6 +138,37 @@ pip install -e .
 ```
 
 旧工作流也可用 `pip install -r requirements.txt`，依赖以 `pyproject.toml` 为准。
+
+### 启动 XPolicyLab 策略
+
+XPolicyLab 在独立策略服务中加载选定的策略和 checkpoint。Open-Rail 通过
+XPolicyLab 的 WebSocket 协议连接该服务，模型依赖留在 XPolicyLab 环境中。
+先初始化仓库内的 XPolicyLab 子模块，并在 Open-Rail 环境安装轻量客户端依赖：
+
+```bash
+git submodule update --init --recursive
+pip install -e ".[xpolicylab]"
+```
+
+在 XPolicyLab 环境中，进入 checkout 并使用目标策略的 `deploy.yml` 和 checkpoint
+配置启动策略服务：
+
+```bash
+cd test/XPolicyLab
+python -m client_server.ws --config_path policy/<POLICY>/deploy.yml --host 0.0.0.0 --port 19000
+```
+
+然后在 Open-Rail 启动模型服务，并配置相同的服务地址：
+
+```bash
+python run_server.py --model_type xpolicylab
+```
+
+根据目标策略和机器人，在 `conf/models_conf.py` 中设置
+`models.xpolicylab.server_url`、`camera_map`、`state_fields` 和有序的
+`action_keys`，并可设置 `expected_action_dim` 检查动作宽度。默认映射适用于 16 维双臂加夹爪向量。XPolicyLab 策略服务返回动作字典，
+Open-Rail 会按配置顺序拼接为 `pred_action` 的每一行。详见
+[`server/models/xpolicylab/README.md`](server/models/xpolicylab/README.md)。
 
 ### 3. 启动服务端
 

@@ -64,6 +64,12 @@ def get_model(config):
     elif config.type == ModelType.WALLX:
         from server.models.wallx import ModelVLA as WallX
         return WallX(config.wallx)
+    elif config.type == ModelType.STARVLA:
+        from server.models.starvla import ModelVLA as STARVLA
+        return STARVLA(config.starvla)
+    elif config.type == ModelType.XPOLICYLAB:
+        from server.models.xpolicylab import ModelVLA as XPOLICYLAB
+        return XPOLICYLAB(config.xpolicylab)
     else:
         raise ValueError("Invalid model type")
 
@@ -76,7 +82,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'pi05_pytorch', 'tao', 'dm05', 'wallx'],
+    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'pi05_pytorch', 'tao', 'dm05', 'wallx', 'starvla', 'xpolicylab'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
@@ -121,6 +127,13 @@ def override_config_with_args(config, args):
             config.models.dm05.model_path = args.model_path
         elif config.models.type == ModelType.WALLX:
             config.models.wallx.model_path = args.model_path
+        elif config.models.type == ModelType.STARVLA:
+            config.models.starvla.model_path = args.model_path
+        elif config.models.type == ModelType.XPOLICYLAB:
+            raise ValueError(
+                "--model_path is not used by the XPolicyLab bridge; configure the checkpoint "
+                "in the XPolicyLab policy server and omit --model_path"
+            )
 
     return config
 

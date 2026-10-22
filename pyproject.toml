@@ -50,6 +50,11 @@ viz = [
   "pyqtgraph==0.14.0",
   "matplotlib==3.10.9",
 ]
+xpolicylab = [
+  "msgpack>=1.0.8",
+  "msgpack-numpy>=0.4.8",
+  "pydantic>=2.5",
+]
 
 [project.scripts]
 open-rail-web-client = "run_web_client:main"
