@@ -324,8 +324,8 @@ def test_g1_golden_observation_actions_match_starvla_and_xpolicylab(monkeypatch,
         assert target.other_calls == []
         for actual, expected in zip(target.arm_targets, G1_ACTIONS[:, :14], strict=True):
             np.testing.assert_array_equal(actual, expected)
-        grippers = G1_ACTIONS[:, 14:16]
-        expected_grippers = grippers**4 / (grippers**4 + (1 - grippers) ** 4)
+        # RAIL and SDK share the same 0=open, 1=closed command convention.
+        expected_grippers = np.clip(G1_ACTIONS[:, 14:16], 0.0, 1.0)
         for actual, expected in zip(target.gripper_targets, expected_grippers[:1], strict=True):
             np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-7)
 

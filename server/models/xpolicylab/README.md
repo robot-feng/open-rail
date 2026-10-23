@@ -52,12 +52,14 @@ instruction. The adapter maps them to XPolicyLab's standard observation:
 }
 ```
 
-Edit `camera_map`, `state_fields`, and `instruction_key` in
+Set `camera_map`, `state_fields`, `action_keys`, and `instruction_key` in
 `conf/models_conf.py` to match the selected policy and robot. `camera_map`
 maps Open-Rail camera names to XPolicyLab camera names. `state_fields` maps
 half-open slices of Open-Rail's flat state vector to XPolicyLab state keys.
-The defaults cover a 16-D bimanual arm/gripper vector; additional state fields
-or a different robot layout require matching slices.
+`state_fields` and `action_keys` start empty and must be configured before
+starting this backend. They do not select a robot, vector width, or joint/EE
+pose representation. Use the robot's layout and the selected policy's contract
+to define these mappings; the adapter rejects empty mappings before connecting.
 
 Open-Rail images arrive already decoded as RGB HWC arrays. The adapter passes
 them through without decoding or swapping channels; XPolicyLab's server also
@@ -67,7 +69,8 @@ leaves image arrays intact.
 
 XPolicyLab policies normally return a list of action dictionaries, one per
 time step. `action_keys` specifies the exact concatenation order for each
-dictionary. The default order is:
+dictionary. For example, a policy using two 7-joint arms and two grippers could
+use this order (configure matching `state_fields` slices as well):
 
 ```text
 left_arm_joint_state, right_arm_joint_state,

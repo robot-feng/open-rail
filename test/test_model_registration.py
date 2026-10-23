@@ -67,3 +67,11 @@ def test_remote_policy_rejects_a_local_checkpoint():
 def test_unknown_model_is_rejected():
     with pytest.raises(ValueError, match="Invalid model type"):
         run_server.get_model(SimpleNamespace(type="unknown"))
+
+
+def test_model_defaults_do_not_select_a_robot_layout():
+    models = get_vla_server_config().models
+    assert models.starvla.get('state_indices') is None
+    assert models.starvla.get('action_indices') is None
+    assert models.xpolicylab.state_fields == []
+    assert models.xpolicylab.action_keys == []

@@ -175,19 +175,6 @@ def get_starvla_config():
     config.normalize_state = True  # Reuse the checkpoint's training-time state transforms.
     config.state_key = 'state'
     config.language_key = 'language'
-    # Flat G1 DiffusionPolicy checkpoints store state as left7+left gripper,
-    # right7+right gripper, then head/waist. Expand its 8D right-arm+gripper
-    # output into a full 20D RAIL action, copying unpredicted dimensions from
-    # the current state.
-    config.dp_state_indices = (
-        list(range(7)) + [14] + list(range(7, 14)) + [15, 16, 17, 18, 19]
-    )
-    config.dp_action_state_indices = list(range(7, 14)) + [15]
-    config.dp_rail_action_dim = 20
-    # The active G1 DP checkpoint ran more smoothly with ten denoising steps.
-    config.dp_num_inference_steps = 10
-    config.expected_state_dim = 20
-    config.expected_action_dim = 20
     return config
 
 
@@ -220,20 +207,10 @@ def get_xpolicylab_config():
         {'source': 'cam.hand_left', 'target': 'cam_left_wrist'},
         {'source': 'cam.hand_right', 'target': 'cam_right_wrist'},
     ]
-    # Default bimanual joint/gripper mapping for a 16-D Open-Rail state/action.
-    # Edit these slices and action_keys to match the target robot and XPL policy.
-    config.state_fields = [
-        {'name': 'left_arm_joint_state', 'start': 0, 'end': 7},
-        {'name': 'right_arm_joint_state', 'start': 7, 'end': 14},
-        {'name': 'left_ee_joint_state', 'start': 14, 'end': 15},
-        {'name': 'right_ee_joint_state', 'start': 15, 'end': 16},
-    ]
-    config.action_keys = [
-        'left_arm_joint_state',
-        'right_arm_joint_state',
-        'left_ee_joint_state',
-        'right_ee_joint_state',
-    ]
+    # Required deployment mappings: match the robot layout and selected policy.
+    # Do not assume a particular robot, dimension count, or joint/EE pose space.
+    config.state_fields = []
+    config.action_keys = []
     config.expected_action_dim = None
     config.instruction_key = 'language'
     return config

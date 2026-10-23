@@ -1,4 +1,7 @@
 {
+  "pick_apple": [
+    "pick the apple to the plate"
+  ],
   "make_coffee": [
     "[PRIMARY_ARM=LEFT] Tap dispenser button",
     "[PRIMARY_ARM=LEFT] Grasps the dropped cup, and places it upright under the right coffee nozzle, aligned.",

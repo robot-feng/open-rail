@@ -42,6 +42,15 @@ def get_agibot_g1_config():
     # A2D SDK 1.5.0 reports both head feedback angles in degrees. Convert them
     # to radians in RobotBody so all RAIL state/action angular values use rad.
     config.head_feedback_unit = 'degrees'
+    # Canonical RAIL fields shared by model adapters. SDK conversion stays in RobotBody.
+    config.io_fields = [
+        {'name': 'left_arm_joint_state', 'start': 0, 'end': 7, 'units': ['rad'] * 7},
+        {'name': 'right_arm_joint_state', 'start': 7, 'end': 14, 'units': ['rad'] * 7},
+        {'name': 'left_ee_joint_state', 'start': 14, 'end': 15, 'units': ['closed_fraction']},
+        {'name': 'right_ee_joint_state', 'start': 15, 'end': 16, 'units': ['closed_fraction']},
+        {'name': 'head_joint_state', 'start': 16, 'end': 18, 'units': ['rad', 'rad']},
+        {'name': 'waist_joint_state', 'start': 18, 'end': 20, 'units': ['rad', 'm']},
+    ]
     config.gripper_freq = 40
     config.head_freq = 40
     config.manual_arm_interval = 0.01

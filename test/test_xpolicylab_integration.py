@@ -32,6 +32,14 @@ def _config(root, url):
     config = get_xpolicylab_config()
     config.repo_path = str(root)
     config.server_url = url
+    # This test policy uses 16D joint/gripper vectors; production defaults are generic.
+    config.state_fields = [
+        {"name": "left_arm_joint_state", "start": 0, "end": 7},
+        {"name": "right_arm_joint_state", "start": 7, "end": 14},
+        {"name": "left_ee_joint_state", "start": 14, "end": 15},
+        {"name": "right_ee_joint_state", "start": 15, "end": 16},
+    ]
+    config.action_keys = [field["name"] for field in config.state_fields]
     config.expected_action_dim = 16
     config.ws_ping_interval_s = config.ws_ping_timeout_s = None
     config.connect_timeout_s = config.handshake_timeout_s = 2.0

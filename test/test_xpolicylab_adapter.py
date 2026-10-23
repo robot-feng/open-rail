@@ -89,6 +89,19 @@ def _make_model(monkeypatch, tmp_path):
     return ModelVLA(_config(tmp_path))
 
 
+@pytest.mark.parametrize("field", ["state_fields", "action_keys"])
+def test_empty_deployment_mapping_fails_before_connect(monkeypatch, tmp_path, field):
+    class UnexpectedClient:
+        def __init__(self, **kwargs):
+            raise AssertionError("Incomplete robot mapping must fail before connecting")
+
+    _install_fake_client(monkeypatch, UnexpectedClient)
+    config = _config(tmp_path)
+    config[field] = []
+    with pytest.raises(ValueError, match=field):
+        ModelVLA(config)
+
+
 def _frame(state, image, language="pick up the cup"):
     return {
         "obs": {
